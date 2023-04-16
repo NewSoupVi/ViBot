@@ -1,0 +1,4 @@
+[submodule "Archipelago"]
+	path = Archipelago
+	url = https://github.com/NewSoupVi/Archipelago.git
+	branch = secret_project
