@@ -9,6 +9,8 @@ import requests
 import os
 from pathlib import Path
 
+import openai
+
 from dateutil.parser import parse
 
 import yaml
@@ -16,14 +18,16 @@ import pytz
 
 import pokegame
 
+import random
+
 import shutil
 
 from Archipelago.APVersionClient import APVersionContext, server_loop
 
 pokegame = pokegame.PokeGame()
 
-
 load_dotenv()
+openai.api_key = os.getenv('CHATGPT_TOKEN')
 TOKEN = os.getenv('DISCORD_TOKEN')
 
 intents = discord.Intents.default()
@@ -177,8 +181,75 @@ async def countmeows(ctx):
     
     
     
+@bot.event
+async def on_message(message):
+    ctx = await bot.get_context(message)
     
+    channel = message.channel
+
+    if not channel.permissions_for(ctx.guild.me).send_messages:
+        return
+
+    if message.author == bot.user:
+        return
+
+    if random.random() > 0.05:
+        print("Random roll for ChatGPT response failed")
+        return
     
+    chatgpt_formatted_messages = """Below will be a chatlog from a group chat. The messages are seperated by empty lines. The top line is the username, and the following lines are the messages they wrote.
+
+Come up with a witty dunk response message to the latest message in the chat log. The response is written by a user called "ViBot". Include the name of the person you are responding to (the user who wrote the last set of messages), so it is clear who you are replying to.
+"""
+    
+    last_user = None
+    
+    most_recent_message = ""
+    
+    most_recent_messages = [msg async for msg in channel.history(limit=15)]
+    most_recent_messages.reverse()
+    
+    user_amt = 0
+    
+    for msg in most_recent_messages:
+        if msg.author == bot.user:
+            continue
+    
+        if not msg.content:
+            continue
+        
+        if last_user != msg.author:
+            last_user = msg.author
+            user_amt += 1
+            chatgpt_formatted_messages += f"\n{msg.author.display_name}\n"
+        
+        chatgpt_formatted_messages += msg.content.strip() + "\n"
+
+        most_recent_message = msg.content
+        
+    if len(most_recent_message) <= 15:
+        print("message too short to respond to")
+        return
+        
+    if user_amt < 3:
+        print("Not enough users participated.")
+        return
+        
+    messages = [
+        {"role": "user", "content": chatgpt_formatted_messages},
+    ]
+    chat = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo", messages=messages
+    )
+    
+    for message in chat.choices:
+        if last_user.display_name in message.message.content:
+            reply = message.message.content.replace('@','')
+            reply = "\n".join([item for item in reply.split("\n")[1:] if item.strip()])
+            print(f"{reply}")
+            return
+        
+    print("Couldn't come up with a good reply")
     
     
 @bot.command()
