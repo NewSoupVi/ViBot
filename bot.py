@@ -33,6 +33,8 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 intents = discord.Intents.default()
 intents.message_content = True
 intents.messages = True
+intents.guilds = True
+intents.members = True
 
 bot = commands.Bot(intents=intents, command_prefix='uwu ')
 
@@ -187,20 +189,20 @@ async def on_message(message):
     
     channel = message.channel
 
+    guild = ctx.guild
+    await guild.chunk()
+
     if not channel.permissions_for(ctx.guild.me).send_messages:
         return
 
     if message.author == bot.user:
         return
 
-    if random.random() > 0.05:
+    if random.random() > 0.02:
         print("Random roll for ChatGPT response failed")
         return
     
-    chatgpt_formatted_messages = """Below will be a chatlog from a group chat. The messages are seperated by empty lines. The top line is the username, and the following lines are the messages they wrote.
-
-Come up with a witty dunk response message to the latest message in the chat log. The response is written by a user called "ViBot". Include the name of the person you are responding to (the user who wrote the last set of messages), so it is clear who you are replying to.
-"""
+    chatgpt_formatted_messages = ""
     
     last_user = None
     
@@ -217,15 +219,27 @@ Come up with a witty dunk response message to the latest message in the chat log
     
         if not msg.content:
             continue
+           
+            
+        member = guild.get_member(msg.author.id)
         
-        if last_user != msg.author:
-            last_user = msg.author
+        if last_user != member:
+            last_user = member
             user_amt += 1
-            chatgpt_formatted_messages += f"\n{msg.author.display_name}\n"
+            chatgpt_formatted_messages += f"\n{member.display_name}\n"
         
         chatgpt_formatted_messages += msg.content.strip() + "\n"
 
         most_recent_message = msg.content
+        
+    chatgpt_start = f"""Below will be a chatlog from a group chat. The messages are seperated by empty lines. The top line is the username, and the following lines are the messages they wrote.
+
+Come up with a witty dunk response message to the latest message in the chat log. The response is written by a user called "ViBot". In your response, include the name of the person you are responding to (which in this case, should be {last_user.display_name}), so it is clear who you are replying to.
+
+Keep it light-hearted.
+
+Here is the chatlog:
+"""
         
     if len(most_recent_message) <= 15:
         print("message too short to respond to")
@@ -235,8 +249,10 @@ Come up with a witty dunk response message to the latest message in the chat log
         print("Not enough users participated.")
         return
         
+    chatgpt_input = chatgpt_start + chatgpt_formatted_messages 
+        
     messages = [
-        {"role": "user", "content": chatgpt_formatted_messages},
+        {"role": "user", "content": chatgpt_input},
     ]
     chat = openai.ChatCompletion.create(
         model="gpt-3.5-turbo", messages=messages
@@ -246,7 +262,7 @@ Come up with a witty dunk response message to the latest message in the chat log
         if last_user.display_name in message.message.content:
             reply = message.message.content.replace('@','')
             reply = "\n".join([item for item in reply.split("\n")[1:] if item.strip()])
-            print(f"{reply}")
+            await channel.send(reply + "\n\n(This is an auto-generated response on a random chance, using ChatGPT.)")
             return
         
     print("Couldn't come up with a good reply")
