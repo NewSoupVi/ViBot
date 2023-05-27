@@ -210,6 +210,9 @@ async def countmeows(ctx):
     
 @bot.event
 async def on_message(message):
+    if message.author == bot.user:
+        return
+
     await bot.process_commands(message)
 
     random_num = random.random()
@@ -232,9 +235,6 @@ async def on_message(message):
     await guild.chunk()
 
     if not channel.permissions_for(ctx.guild.me).send_messages:
-        return
-
-    if message.author == bot.user:
         return
     
     chatgpt_formatted_messages = ""
