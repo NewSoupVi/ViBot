@@ -38,6 +38,13 @@ intents.members = True
 
 bot = commands.Bot(intents=intents, command_prefix='uwu ')
 
+server_id_whitelist = {
+    877010169475768320, # test server
+    788228686838104085, # NewSoupVi's server
+    380211227093237761, # Jason's Server
+    411803330008973313, # SDGShawn's server
+}
+
 @bot.command()
 async def test(ctx, arg="Test successful!"):
     await ctx.send(arg)
@@ -78,6 +85,10 @@ async def collectyamls(ctx, *, arg="1/1/1970", download=True):
         Path("./yamls").mkdir(parents=True, exist_ok=True)
         for f in os.listdir("./yamls"):
             os.remove(os.path.join("./yamls", f))
+        
+        Path("./apworlds").mkdir(parents=True, exist_ok=True)
+        for f in os.listdir("./apworlds"):
+            os.remove(os.path.join("./apworlds", f))
     
     async for message in chat_history:
         if message.attachments:
@@ -86,7 +97,7 @@ async def collectyamls(ctx, *, arg="1/1/1970", download=True):
          
             for att in message.attachments:
                 url = att.url
-                if not url.lower().endswith(".yaml"):
+                if not url.lower().endswith(".yaml") and not url.lower().endswith(".apworld"):
                     continue
                     
                 history.append(url)
@@ -98,13 +109,22 @@ async def collectyamls(ctx, *, arg="1/1/1970", download=True):
                 gamesInYaml = 1
                 
                 req = requests.get(url)
-                txt = req.text
+                txt = req.content
                
                 if download == True or download == "True":
-                    fileName = "./yamls/" + os.path.basename(url)
-                    file = open(fileName, 'w')
+                    if url.lower().endswith(".yaml"):
+                        fileName = "./yamls/"
+                    else:
+                        fileName = "./apworlds/"
+                    fileName += os.path.basename(url)
+                    file = open(fileName, 'wb')
                     file.write(txt)
                     file.close()
+                    
+                if url.lower().endswith(".apworld"):
+                    continue
+                    
+                txt = req.text
                 
                 yamlcounts[usr] += 1 + txt.count("---")
                 
@@ -148,9 +168,14 @@ async def collectyamls(ctx, *, arg="1/1/1970", download=True):
     outmsg += "\n**Total**: " + str(totalsum)
     
     shutil.make_archive("./yamls", 'zip', "./yamls")
+    shutil.make_archive("./apworlds", 'zip', "./apworlds")
+    
+    files = [discord.File("./yamls.zip")]
+    if len(os.listdir('./apworlds')):
+        files.append(discord.File("./apworlds.zip"))
     
     if download:
-        await ctx.send(outmsg, file=discord.File("./yamls.zip"))
+        await ctx.send(outmsg, files=files)
     else:
         await ctx.send(outmsg)
 
@@ -185,21 +210,31 @@ async def countmeows(ctx):
     
 @bot.event
 async def on_message(message):
+    await bot.process_commands(message)
+
+    random_num = random.random()
+
     ctx = await bot.get_context(message)
     
     channel = message.channel
 
     guild = ctx.guild
+    id = guild.id
+    
+    if id not in server_id_whitelist:
+        print(f"Server id not whitelisted: {id}")
+        return
+        
+    if random_num > 0.3:
+        print("Random roll failed")
+        return
+    
     await guild.chunk()
 
     if not channel.permissions_for(ctx.guild.me).send_messages:
         return
 
     if message.author == bot.user:
-        return
-
-    if random.random() > 0.02:
-        print("Random roll for ChatGPT response failed")
         return
     
     chatgpt_formatted_messages = ""
@@ -210,6 +245,10 @@ async def on_message(message):
     
     most_recent_messages = [msg async for msg in channel.history(limit=15)]
     most_recent_messages.reverse()
+    
+    if not most_recent_messages[-1].content.strip():
+        print("Most recent message was empty. Not responding")
+        return
     
     user_amt = 0
     
@@ -228,15 +267,13 @@ async def on_message(message):
             user_amt += 1
             chatgpt_formatted_messages += f"\n{member.display_name}\n"
         
-        chatgpt_formatted_messages += msg.content.strip() + "\n"
+        chatgpt_formatted_messages += msg.content.strip().replace("\n\n","\n") + "\n"
 
         most_recent_message = msg.content
         
     chatgpt_start = f"""Below will be a chatlog from a group chat. The messages are seperated by empty lines. The top line is the username, and the following lines are the messages they wrote.
 
-Come up with a witty dunk response message to the latest message in the chat log. The response is written by a user called "ViBot". In your response, include the name of the person you are responding to (which in this case, should be {last_user.display_name}), so it is clear who you are replying to.
-
-Keep it light-hearted.
+Come up with a witty response message to the latest message in the chat log, making light fun of it. The response is written by a user called "ViBot". In your response, include the name of the person you are responding to (which in this case, should be {last_user.display_name}), so it is clear who you are replying to.
 
 Here is the chatlog:
 """
@@ -262,6 +299,13 @@ Here is the chatlog:
         if last_user.display_name in message.message.content:
             reply = message.message.content.replace('@','')
             reply = "\n".join([item for item in reply.split("\n")[1:] if item.strip()])
+            if not reply.strip():
+                break
+            
+            if random_num > 0.015:
+                print(f"Random roll failed. The reply would've been: {reply}")
+                return
+            
             await channel.send(reply + "\n\n(This is an auto-generated response on a random chance, using ChatGPT.)")
             return
         
